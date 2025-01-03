@@ -26,6 +26,7 @@ from diffusers import (
     KDPM2DiscreteScheduler,
     UniPCMultistepScheduler,
 )
+from comfy.model_management import get_torch_device
 
 SCHEDULERS = {
     'DDIM' : DDIMScheduler,
@@ -42,6 +43,7 @@ SCHEDULERS = {
 }
 
 def token_auto_concat_embeds(pipe, positive, negative):
+    device = get_torch_device()
     max_length = pipe.tokenizer.model_max_length
     positive_length = pipe.tokenizer(positive, return_tensors="pt").input_ids.shape[-1]
     negative_length = pipe.tokenizer(negative, return_tensors="pt").input_ids.shape[-1]
@@ -50,14 +52,14 @@ def token_auto_concat_embeds(pipe, positive, negative):
     if max_length < positive_length or max_length < negative_length:
         print('Concatenated embedding.')
         if positive_length > negative_length:
-            positive_ids = pipe.tokenizer(positive, return_tensors="pt").input_ids.to("cuda")
-            negative_ids = pipe.tokenizer(negative, truncation=False, padding="max_length", max_length=positive_ids.shape[-1], return_tensors="pt").input_ids.to("cuda")
+            positive_ids = pipe.tokenizer(positive, return_tensors="pt").input_ids.to(device)
+            negative_ids = pipe.tokenizer(negative, truncation=False, padding="max_length", max_length=positive_ids.shape[-1], return_tensors="pt").input_ids.to(device)
         else:
-            negative_ids = pipe.tokenizer(negative, return_tensors="pt").input_ids.to("cuda")  
-            positive_ids = pipe.tokenizer(positive, truncation=False, padding="max_length", max_length=negative_ids.shape[-1],  return_tensors="pt").input_ids.to("cuda")
+            negative_ids = pipe.tokenizer(negative, return_tensors="pt").input_ids.to(device)  
+            positive_ids = pipe.tokenizer(positive, truncation=False, padding="max_length", max_length=negative_ids.shape[-1],  return_tensors="pt").input_ids.to(device)
     else:
-        positive_ids = pipe.tokenizer(positive, truncation=False, padding="max_length", max_length=max_length,  return_tensors="pt").input_ids.to("cuda")
-        negative_ids = pipe.tokenizer(negative, truncation=False, padding="max_length", max_length=max_length, return_tensors="pt").input_ids.to("cuda")
+        positive_ids = pipe.tokenizer(positive, truncation=False, padding="max_length", max_length=max_length,  return_tensors="pt").input_ids.to(device)
+        negative_ids = pipe.tokenizer(negative, truncation=False, padding="max_length", max_length=max_length, return_tensors="pt").input_ids.to(device)
     
     positive_concat_embeds = []
     negative_concat_embeds = []
@@ -183,7 +185,7 @@ def vae_pt_to_vae_diffuser(
 
     original_config = OmegaConf.load(io_obj)
     image_size = 512
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = get_torch_device()
     if checkpoint_path.endswith("safetensors"):
         from safetensors import safe_open
 
@@ -207,7 +209,7 @@ def convert_images_to_tensors(images: list[Image.Image]):
     return torch.stack([np.transpose(ToTensor()(image), (1, 2, 0)) for image in images])
 
 def convert_tensors_to_images(images: torch.tensor):
-    return [Image.fromarray(np.clip(255. * image.cpu().numpy(), 0, 255).astype(np.uint8)) for image in images]
+    return [Image.fromarray(np.clip(255. * image.to("cpu").numpy(), 0, 255).astype(np.uint8)) for image in images]
 
 def resize_images(images: list[Image.Image], size: tuple[int, int]):
     return [image.resize(size) for image in images]
