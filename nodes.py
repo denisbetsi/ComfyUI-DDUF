@@ -2,7 +2,7 @@ import copy
 import os
 import torch
 from safetensors.torch import load_file
-from .utils import SCHEDULERS, token_auto_concat_embeds, vae_pt_to_vae_diffuser, convert_images_to_tensors, convert_tensors_to_images, resize_images
+from .utils import SCHEDULERS, token_auto_concat_embeds, convert_images_to_tensors
 from comfy.model_management import get_torch_device
 import folder_paths
 from diffusers import StableDiffusionPipeline, AutoencoderKL, AutoencoderTiny
@@ -23,10 +23,10 @@ class DDUFLoader:
     CATEGORY = "Diffusers"
 
     def create_pipeline(self, ckpt_name):
-        dduf_path = folder_paths.get_full_path("checkpoints")
+        dduf_path = folder_paths.get_folder_paths("checkpoints")
 
         pipe = DiffusionPipeline.from_pretrained(
-            pretrained_model_name_or_path=dduf_path,
+            pretrained_model_name_or_path=dduf_path[0],
             dduf_file=ckpt_name,
             torch_dtype=self.dtype,
             cache_dir=self.tmp_dir,
@@ -64,33 +64,6 @@ class DiffusersPipelineLoader:
             cache_dir=self.tmp_dir,
         )
         return ((pipe, ckpt_cache_path), pipe.vae, pipe.scheduler)
-
-class DiffusersVaeLoader:
-    def __init__(self):
-        self.tmp_dir = folder_paths.get_temp_directory()
-        self.dtype = torch.float32
-    
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": { "vae_name": (folder_paths.get_filename_list("vae"), ), }}
-
-    RETURN_TYPES = ("AUTOENCODER",)
-
-    FUNCTION = "create_pipeline"
-
-    CATEGORY = "Diffusers"
-
-    def create_pipeline(self, vae_name):
-        ckpt_cache_path = os.path.join(self.tmp_dir, vae_name)
-        vae_pt_to_vae_diffuser(folder_paths.get_full_path("vae", vae_name), ckpt_cache_path)
-
-        vae = AutoencoderKL.from_pretrained(
-            pretrained_model_name_or_path=ckpt_cache_path,
-            torch_dtype=self.dtype,
-            cache_dir=self.tmp_dir,
-        )
-        
-        return (vae,)
 
 class DiffusersSchedulerLoader:
     def __init__(self):
@@ -145,33 +118,10 @@ class DiffusersModelMakeup:
         pipeline = pipeline[0]
         pipeline.vae = autoencoder
         pipeline.scheduler = scheduler
-        pipeline.safety_checker = None if pipeline.safety_checker is None else lambda images, **kwargs: (images, [False])
-        pipeline.enable_attention_slicing()
         pipeline = pipeline.to(self.torch_device)
         return (pipeline,)
 
-class DiffusersClipTextEncode:
-    @classmethod
-    def INPUT_TYPES(s):
-        return {"required": {
-            "maked_pipeline": ("MAKED_PIPELINE", ),
-            "positive": ("STRING", {"multiline": True}),
-            "negative": ("STRING", {"multiline": True}),
-        }}
-
-    RETURN_TYPES = ("EMBEDS", "EMBEDS", "STRING", "STRING", )
-    RETURN_NAMES = ("positive_embeds", "negative_embeds", "positive", "negative", )
-
-    FUNCTION = "concat_embeds"
-
-    CATEGORY = "Diffusers"
-
-    def concat_embeds(self, maked_pipeline, positive, negative):
-        positive_embeds, negative_embeds = token_auto_concat_embeds(maked_pipeline, positive,negative)
-
-        return (positive_embeds, negative_embeds, positive, negative, )
-
-class DiffusersSampler:
+class DiffusersSimpleSampler:
     def __init__(self):
         self.torch_device = get_torch_device()
         
@@ -179,54 +129,44 @@ class DiffusersSampler:
     def INPUT_TYPES(s):
         return {"required": {
             "maked_pipeline": ("MAKED_PIPELINE", ),
-            "positive_embeds": ("EMBEDS", ),
-            "negative_embeds": ("EMBEDS", ),
-            "width": ("INT", {"default": 512, "min": 1, "max": 8192, "step": 1}),
-            "height": ("INT", {"default": 512, "min": 1, "max": 8192, "step": 1}),
-            "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
-            "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step":0.1, "round": 0.01}),
+            "prompt": ("STRING", {"multiline": True}),
+            "width": ("INT", {"default": 1360, "min": 1, "max": 8192, "step": 1}),
+            "height": ("INT", {"default": 768, "min": 1, "max": 8192, "step": 1}),
+            "steps": ("INT", {"default": 4, "min": 1, "max": 10000}),
+            "cfg": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 100.0, "step":0.1, "round": 0.01}),
             "seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+            "max_sequence_length": ("INT", {"default": 256, "min": 1, "max": 1024}),
         }}
 
     RETURN_TYPES = ("IMAGE",)
-
     FUNCTION = "sample"
-
     CATEGORY = "Diffusers"
 
-    def sample(self, maked_pipeline, positive_embeds, negative_embeds, height, width, steps, cfg, seed):
+    def sample(self, maked_pipeline, prompt, height, width, steps, cfg, seed, max_sequence_length):
         images = maked_pipeline(
-            prompt_embeds=positive_embeds,
+            prompt=prompt,
             height=height,
             width=width,
             num_inference_steps=steps,
             guidance_scale=cfg,
-            negative_prompt_embeds=negative_embeds,
-            generator=torch.Generator(self.torch_device).manual_seed(seed)
+            generator=torch.Generator(self.torch_device).manual_seed(seed),
+            max_sequence_length=max_sequence_length,
         ).images
+        
         return (convert_images_to_tensors(images),)
-
 
 NODE_CLASS_MAPPINGS = {
     "DiffusersPipelineLoader": DiffusersPipelineLoader,
-    "DiffusersVaeLoader": DiffusersVaeLoader,
     "DiffusersSchedulerLoader": DiffusersSchedulerLoader,
     "DiffusersModelMakeup": DiffusersModelMakeup,
-    "DiffusersClipTextEncode": DiffusersClipTextEncode,
-    "DiffusersSampler": DiffusersSampler,
-    # "CreateIntListNode": CreateIntListNode,
-    # "LcmLoraLoader": LcmLoraLoader,
+    "DiffusersSimpleSampler": DiffusersSimpleSampler,
     "DDUFLoader": DDUFLoader,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "DiffusersPipelineLoader": "Diffusers Pipeline Loader",
-    "DiffusersVaeLoader": "Diffusers Vae Loader",
     "DiffusersSchedulerLoader": "Diffusers Scheduler Loader",
     "DiffusersModelMakeup": "Diffusers Model Makeup",
-    "DiffusersClipTextEncode": "Diffusers Clip Text Encode",
-    "DiffusersSampler": "Diffusers Sampler",
-    # "CreateIntListNode": "Create Int List",
-    # "LcmLoraLoader": "LCM Lora Loader",
+    "DiffusersSimpleSampler": "Diffusers Simple Sampler",
     "DDUFLoader": "DDUF Loader",
 }
