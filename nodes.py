@@ -6,6 +6,7 @@ from .utils import SCHEDULERS, token_auto_concat_embeds, vae_pt_to_vae_diffuser,
 from comfy.model_management import get_torch_device
 import folder_paths
 from diffusers import StableDiffusionPipeline, AutoencoderKL, AutoencoderTiny
+from diffusers import DiffusionPipeline
 
 
 class DiffusersPipelineLoader:
@@ -180,6 +181,35 @@ class DiffusersSampler:
         ).images
         return (convert_images_to_tensors(images),)
 
+# class DDUFLoader:
+#     def __init__(self):
+#         self.tmp_dir = folder_paths.get_temp_directory()
+#         self.dtype = torch.float32
+    
+#     @classmethod
+#     def INPUT_TYPES(s):
+#         return {
+#             "required": {
+#                 "dduf_name": (folder_paths.get_filename_list("dduf"), ),  # Assumes dduf files are in a "dduf" folder
+#                 "model_id": ("STRING", {"default": "DDUF/FLUX.1-dev-DDUF"})
+#             }
+#         }
+
+#     RETURN_TYPES = ("PIPELINE", "AUTOENCODER", "SCHEDULER",)
+#     FUNCTION = "create_pipeline"
+#     CATEGORY = "Diffusers"
+
+#     def create_pipeline(self, dduf_name, model_id):
+#         dduf_path = folder_paths.get_full_path("dduf", dduf_name)
+        
+#         pipe = DiffusionPipeline.from_pretrained(
+#             model_id,
+#             dduf_file=dduf_path,
+#             torch_dtype=self.dtype,
+#             cache_dir=self.tmp_dir,
+#         )
+        
+#         return ((pipe, self.tmp_dir), pipe.vae, pipe.scheduler)
 
 NODE_CLASS_MAPPINGS = {
     "DiffusersPipelineLoader": DiffusersPipelineLoader,
@@ -190,6 +220,7 @@ NODE_CLASS_MAPPINGS = {
     "DiffusersSampler": DiffusersSampler,
     "CreateIntListNode": CreateIntListNode,
     "LcmLoraLoader": LcmLoraLoader,
+    "DDUFLoader": DDUFLoader,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
@@ -201,4 +232,5 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DiffusersSampler": "Diffusers Sampler",
     "CreateIntListNode": "Create Int List",
     "LcmLoraLoader": "LCM Lora Loader",
+    "DDUFLoader": "DDUF Loader",
 }
