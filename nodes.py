@@ -22,11 +22,12 @@ class DDUFLoader:
     FUNCTION = "create_pipeline"
     CATEGORY = "Diffusers"
 
-    def create_pipeline(self, dduf_name, model_id):
-        dduf_path = folder_paths.get_full_path("checkpoints", dduf_name)
-        
+    def create_pipeline(self, ckpt_name):
+        dduf_path = folder_paths.get_full_path("checkpoints")
+
         pipe = DiffusionPipeline.from_pretrained(
-            dduf_file=dduf_path,
+            pretrained_model_name_or_path=dduf_path,
+            dduf_file=ckpt_name,
             torch_dtype=self.dtype,
             cache_dir=self.tmp_dir,
         )
