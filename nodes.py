@@ -219,7 +219,7 @@ NODE_CLASS_MAPPINGS = {
     "DiffusersClipTextEncode": DiffusersClipTextEncode,
     "DiffusersSampler": DiffusersSampler,
     # "CreateIntListNode": CreateIntListNode,
-    "LcmLoraLoader": LcmLoraLoader,
+    # "LcmLoraLoader": LcmLoraLoader,
     # "DDUFLoader": DDUFLoader,
 }
 
@@ -231,6 +231,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "DiffusersClipTextEncode": "Diffusers Clip Text Encode",
     "DiffusersSampler": "Diffusers Sampler",
     # "CreateIntListNode": "Create Int List",
-    "LcmLoraLoader": "LCM Lora Loader",
+    # "LcmLoraLoader": "LCM Lora Loader",
     # "DDUFLoader": "DDUF Loader",
 }
