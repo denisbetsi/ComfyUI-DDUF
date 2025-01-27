@@ -86,8 +86,11 @@ class DiffusersSchedulerLoader:
     CATEGORY = "Diffusers"
 
     def load_scheduler(self, pipeline, scheduler_name):
+        # Unpack pipeline tuple if it's a tuple, otherwise use the pipeline object directly
+        pipeline_path = pipeline[1] if isinstance(pipeline, tuple) else pipeline.components_path
+        
         scheduler = SCHEDULERS[scheduler_name].from_pretrained(
-            pretrained_model_name_or_path=pipeline[1],
+            pretrained_model_name_or_path=pipeline_path,
             torch_dtype=self.dtype,
             cache_dir=self.tmp_dir,
             subfolder='scheduler'
@@ -115,7 +118,8 @@ class DiffusersModelMakeup:
     CATEGORY = "Diffusers"
 
     def makeup_pipeline(self, pipeline, scheduler, autoencoder):
-        pipeline = pipeline[0]
+        # Unpack pipeline tuple if it's a tuple, otherwise use the pipeline object directly
+        pipeline = pipeline[0] if isinstance(pipeline, tuple) else pipeline
         pipeline.vae = autoencoder
         pipeline.scheduler = scheduler
         pipeline = pipeline.to(self.torch_device)
