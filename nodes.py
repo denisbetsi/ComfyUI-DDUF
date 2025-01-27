@@ -86,16 +86,51 @@ class DiffusersSchedulerLoader:
     CATEGORY = "Diffusers"
 
     def load_scheduler(self, pipeline, scheduler_name):
-        # Unpack pipeline tuple if it's a tuple, otherwise use the pipeline object directly
-        pipeline_path = pipeline[1] if isinstance(pipeline, tuple) else pipeline.components_path
+        print(f"Pipeline type: {type(pipeline)}")
+        print(f"Pipeline attributes: {dir(pipeline)}")
         
-        scheduler = SCHEDULERS[scheduler_name].from_pretrained(
-            pretrained_model_name_or_path=pipeline_path,
-            torch_dtype=self.dtype,
-            cache_dir=self.tmp_dir,
-            subfolder='scheduler'
-        )
-        return (scheduler,)
+        if isinstance(pipeline, tuple):
+            print("Pipeline is a tuple:", pipeline)
+            pipeline_path = pipeline[1]
+        else:
+            print("Pipeline is an object")
+            # Try different possible attributes for the path
+            if hasattr(pipeline, 'components_path'):
+                pipeline_path = pipeline.components_path
+            elif hasattr(pipeline, 'model_dir'):
+                pipeline_path = pipeline.model_dir
+            elif hasattr(pipeline, '_internal_dict'):
+                # Some pipelines store their config in _internal_dict
+                print("Internal dict keys:", pipeline._internal_dict.keys())
+                pipeline_path = pipeline._internal_dict.get('_name_or_path', self.tmp_dir)
+            else:
+                # Fallback to the temporary directory
+                print("Warning: Could not find model path, using temporary directory")
+                pipeline_path = self.tmp_dir
+        
+        print(f"Using pipeline path: {pipeline_path}")
+        
+        try:
+            scheduler = SCHEDULERS[scheduler_name].from_pretrained(
+                pretrained_model_name_or_path=pipeline_path,
+                torch_dtype=self.dtype,
+                cache_dir=self.tmp_dir,
+                subfolder='scheduler'
+            )
+            return (scheduler,)
+        except Exception as e:
+            print(f"Error loading scheduler: {str(e)}")
+            # Try loading without subfolder
+            try:
+                scheduler = SCHEDULERS[scheduler_name].from_pretrained(
+                    pretrained_model_name_or_path=pipeline_path,
+                    torch_dtype=self.dtype,
+                    cache_dir=self.tmp_dir
+                )
+                return (scheduler,)
+            except Exception as e:
+                print(f"Second attempt failed: {str(e)}")
+                raise
 
 class DiffusersModelMakeup:
     def __init__(self):
