@@ -91,46 +91,38 @@ class DiffusersSchedulerLoader:
         
         if isinstance(pipeline, tuple):
             print("Pipeline is a tuple:", pipeline)
+            pipeline_obj = pipeline[0]
             pipeline_path = pipeline[1]
         else:
             print("Pipeline is an object")
-            # Try different possible attributes for the path
-            if hasattr(pipeline, 'components_path'):
-                pipeline_path = pipeline.components_path
-            elif hasattr(pipeline, 'model_dir'):
-                pipeline_path = pipeline.model_dir
-            elif hasattr(pipeline, '_internal_dict'):
-                # Some pipelines store their config in _internal_dict
-                print("Internal dict keys:", pipeline._internal_dict.keys())
-                pipeline_path = pipeline._internal_dict.get('_name_or_path', self.tmp_dir)
-            else:
-                # Fallback to the temporary directory
-                print("Warning: Could not find model path, using temporary directory")
-                pipeline_path = self.tmp_dir
-        
-        print(f"Using pipeline path: {pipeline_path}")
-        
+            pipeline_obj = pipeline
+            pipeline_path = self.tmp_dir
+
+        # Try to get existing scheduler config
         try:
-            scheduler = SCHEDULERS[scheduler_name].from_pretrained(
-                pretrained_model_name_or_path=pipeline_path,
-                torch_dtype=self.dtype,
-                cache_dir=self.tmp_dir,
-                subfolder='scheduler'
-            )
-            return (scheduler,)
-        except Exception as e:
-            print(f"Error loading scheduler: {str(e)}")
-            # Try loading without subfolder
-            try:
-                scheduler = SCHEDULERS[scheduler_name].from_pretrained(
-                    pretrained_model_name_or_path=pipeline_path,
-                    torch_dtype=self.dtype,
-                    cache_dir=self.tmp_dir
-                )
+            if hasattr(pipeline_obj, 'scheduler') and pipeline_obj.scheduler is not None:
+                print("Using existing scheduler config")
+                existing_scheduler = pipeline_obj.scheduler
+                config_dict = existing_scheduler.config
+                
+                # Create new scheduler with existing config
+                scheduler = SCHEDULERS[scheduler_name].from_config(config_dict)
+                scheduler = scheduler.set_format(dtype=self.dtype)
                 return (scheduler,)
-            except Exception as e:
-                print(f"Second attempt failed: {str(e)}")
-                raise
+                
+        except Exception as e:
+            print(f"Failed to use existing scheduler config: {str(e)}")
+
+        # If that fails, try creating a default scheduler
+        try:
+            print("Attempting to create default scheduler")
+            scheduler = SCHEDULERS[scheduler_name]()
+            scheduler = scheduler.set_format(dtype=self.dtype)
+            return (scheduler,)
+            
+        except Exception as e:
+            print(f"Failed to create default scheduler: {str(e)}")
+            raise
 
 class DiffusersModelMakeup:
     def __init__(self):
