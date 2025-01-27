@@ -92,11 +92,9 @@ class DiffusersSchedulerLoader:
         if isinstance(pipeline, tuple):
             print("Pipeline is a tuple:", pipeline)
             pipeline_obj = pipeline[0]
-            pipeline_path = pipeline[1]
         else:
             print("Pipeline is an object")
             pipeline_obj = pipeline
-            pipeline_path = self.tmp_dir
 
         # Try to get existing scheduler config
         try:
@@ -107,7 +105,11 @@ class DiffusersSchedulerLoader:
                 
                 # Create new scheduler with existing config
                 scheduler = SCHEDULERS[scheduler_name].from_config(config_dict)
-                scheduler = scheduler.set_format(dtype=self.dtype)
+                
+                # Set dtype if the scheduler supports it
+                if hasattr(scheduler, 'dtype'):
+                    scheduler.dtype = self.dtype
+                
                 return (scheduler,)
                 
         except Exception as e:
@@ -117,7 +119,11 @@ class DiffusersSchedulerLoader:
         try:
             print("Attempting to create default scheduler")
             scheduler = SCHEDULERS[scheduler_name]()
-            scheduler = scheduler.set_format(dtype=self.dtype)
+            
+            # Set dtype if the scheduler supports it
+            if hasattr(scheduler, 'dtype'):
+                scheduler.dtype = self.dtype
+                
             return (scheduler,)
             
         except Exception as e:
